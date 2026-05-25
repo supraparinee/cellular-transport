@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>การลำเลียงสารผ่านเยื่อหุ้มเซลล์ — Cell Membrane Transport Simulation</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  html, body { font-family: 'Sarabun', system-ui, -apple-system, sans-serif; }
+  body { background: linear-gradient(135deg,#eef2ff 0%,#f0fdf4 50%,#fef9c3 100%); min-height:100vh; }
+  .mode-tab { transition: all .18s ease; }
+  .mode-tab.active { background:#4f46e5; color:#fff; box-shadow:0 6px 14px rgba(79,70,229,.35); transform: translateY(-1px); }
+  .mode-tab:not(.active) { background:#ffffff; color:#374151; border:1px solid #e5e7eb; }
+  .mode-tab:not(.active):hover { background:#f3f4f6; }
+  .stat-card { background: linear-gradient(135deg,#ffffff,#fafafa); }
+  input[type=range] { accent-color:#4f46e5; }
+  .glow-btn:hover { transform: translateY(-1px); box-shadow:0 8px 18px rgba(34,197,94,.35); }
+  .legend-dot { width:14px; height:14px; border-radius:9999px; display:inline-block; }
+  .ion-chip { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:9999px; color:#fff; font-weight:700; font-size:9px; }
+</style>
+</head>
+<body class="p-3 md:p-6">
+
+<div class="max-w-[1400px] mx-auto">
+
+  <!-- Header -->
+  <header class="text-center mb-4">
+    <h1 class="text-2xl md:text-3xl font-bold text-slate-800">การลำเลียงสารผ่านเยื่อหุ้มเซลล์</h1>
+    <p class="text-slate-500 text-sm md:text-base">Cell Membrane Transport Simulation · พร้อม Na⁺/K⁺ ATPase pump แบบสมจริง</p>
+  </header>
+
+  <!-- Tabs -->
+  <div class="flex flex-wrap gap-2 justify-center mb-4">
+    <button data-mode="simple"     class="mode-tab active px-4 py-2 rounded-lg font-semibold text-sm">① Simple Diffusion</button>
+    <button data-mode="osmosis"    class="mode-tab px-4 py-2 rounded-lg font-semibold text-sm">② Osmosis</button>
+    <button data-mode="facilitated"class="mode-tab px-4 py-2 rounded-lg font-semibold text-sm">③ Facilitated Diffusion</button>
+    <button data-mode="active"     class="mode-tab px-4 py-2 rounded-lg font-semibold text-sm">④ Active Transport (Na⁺/K⁺ Pump)</button>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- ============ LEFT: CONTROLS ============ -->
+    <aside class="lg:col-span-3 space-y-4">
+
+      <div class="bg-white rounded-2xl shadow-md p-4">
+        <h2 class="font-bold text-slate-700 mb-2 flex items-center gap-2">
+          <span class="w-2 h-2 bg-indigo-500 rounded-full"></span>แผงควบคุม (Controls)
+        </h2>
+        <div id="mode-blurb" class="text-xs text-slate-500 mb-3 leading-relaxed"></div>
+
+        <!-- Outside Concentration -->
+        <label class="block mb-3">
+          <span class="text-sm font-semibold text-slate-700 flex justify-between">
+            <span id="outConcTitle">ความเข้มข้นนอกเซลล์</span>
+            <span id="outConcLabel" class="text-indigo-600">50%</span>
+          </span>
+          <input id="outConc" type="range" min="0" max="100" value="70" class="w-full mt-1">
+          <span id="outConcHint" class="text-[10px] text-slate-400">Extracellular concentration</span>
+        </label>
+
+        <!-- Inside Concentration -->
+        <label class="block mb-3">
+          <span class="text-sm font-semibold text-slate-700 flex justify-between">
+            <span id="inConcTitle">ความเข้มข้นในเซลล์</span>
+            <span id="inConcLabel" class="text-rose-600">50%</span>
+          </span>
+          <input id="inConc" type="range" min="0" max="100" value="30" class="w-full mt-1">
+          <span id="inConcHint" class="text-[10px] text-slate-400">Intracellular concentration</span>
+        </label>
+
+        <!-- Speed -->
+        <label class="block mb-3">
+          <span class="text-sm font-semibold text-slate-700 flex justify-between">
+            <span>ความเร็วการจำลอง</span>
+            <span id="speedLabel" class="text-emerald-600">1×</span>
+          </span>
+          <input id="speed" type="range" min="0.25" max="3" step="0.25" value="1" class="w-full mt-1">
+        </label>
+
+        <!-- ATP Controls (active only) -->
+        <div id="atpControls" class="hidden border-t pt-3 mt-3">
+          <!-- Preset scenarios -->
+          <h3 class="text-sm font-bold text-teal-700 mb-2">🧪 สถานการณ์ทดลอง (Presets)</h3>
+          <div class="grid grid-cols-3 gap-1 mb-3">
+            <button id="presetRest"  class="px-1 py-2 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 text-emerald-800 text-[10px] font-semibold rounded transition leading-tight">Resting<br>Cell</button>
+            <button id="presetBuild" class="px-1 py-2 bg-blue-100 hover:bg-blue-200 border border-blue-300 text-blue-800 text-[10px] font-semibold rounded transition leading-tight">Build<br>Gradient</button>
+            <button id="presetMax"   class="px-1 py-2 bg-purple-100 hover:bg-purple-200 border border-purple-300 text-purple-800 text-[10px] font-semibold rounded transition leading-tight">Max<br>Polarized</button>
+          </div>
+
+          <h3 class="text-sm font-bold text-amber-700 mb-2">⚡ พลังงาน ATP</h3>
+          <button id="injectAtp" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 rounded-lg text-sm shadow glow-btn transition">
+            + เติมพลังงาน ATP (Inject ATP)
+          </button>
+          <label class="block mt-3">
+            <span class="text-xs font-semibold text-slate-700 flex justify-between">
+              <span>อัตราการสร้าง ATP อัตโนมัติ</span>
+              <span id="atpRateLabel" class="text-amber-600">2</span>
+            </span>
+            <input id="atpRate" type="range" min="0" max="5" step="1" value="2" class="w-full mt-1">
+            <span class="text-[10px] text-slate-400">โมเลกุล / วินาที (จำลองการหายใจระดับเซลล์)</span>
+          </label>
+          <div class="text-[10px] text-slate-500 mt-2 leading-relaxed bg-amber-50 p-2 rounded border border-amber-200">
+            <b>Na⁺/K⁺ ATPase cycle:</b><br>
+            • จับ Na⁺ 3 ตัวจากในเซลล์<br>
+            • ATP จับเข้ามา → ปลดปล่อยพลังงาน<br>
+            • Pump เปลี่ยนรูป (Phosphorylated)<br>
+            • ปล่อย Na⁺ 3 ตัวออกนอกเซลล์<br>
+            • จับ K⁺ 2 ตัวจากนอกเซลล์<br>
+            • ปล่อย ADP+Pi → Pump เปลี่ยนรูปกลับ<br>
+            • ปล่อย K⁺ 2 ตัวเข้าเซลล์
+          </div>
+
+          <!-- Inhibitor experiment (Ouabain) -->
+          <label class="flex items-center gap-2 mt-3 cursor-pointer bg-rose-50 border border-rose-200 rounded p-2 hover:bg-rose-100 transition">
+            <input type="checkbox" id="ouabain" class="w-4 h-4 accent-rose-600">
+            <div class="flex-1">
+              <span class="text-xs font-bold text-rose-700">💊 เติม Ouabain (Inhibitor)</span>
+              <div class="text-[9px] text-rose-600 leading-tight">Cardiac glycoside · ยับยั้ง Na⁺/K⁺ ATPase</div>
+            </div>
+          </label>
+        </div>
+
+        <!-- Run buttons -->
+        <div class="grid grid-cols-3 gap-2 mt-4 border-t pt-3">
+          <button id="startBtn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 rounded-lg text-sm shadow transition">▶ Start</button>
+          <button id="pauseBtn" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 rounded-lg text-sm shadow transition">❚❚ Pause</button>
+          <button id="resetBtn" class="bg-slate-500 hover:bg-slate-600 text-white font-bold py-2 rounded-lg text-sm shadow transition">↺ Reset</button>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="bg-white rounded-2xl shadow-md p-4">
+        <h3 class="font-bold text-slate-700 mb-2 text-sm">สัญลักษณ์ (Legend)</h3>
+        <div id="legendDefault" class="text-xs space-y-1.5 text-slate-600">
+          <div class="flex items-center gap-2"><span class="legend-dot bg-blue-500"></span>โมเลกุลน้ำ (H₂O)</div>
+          <div class="flex items-center gap-2"><span class="legend-dot bg-rose-500"></span>โมเลกุลของสาร (Solute · ไม่มีประจุ)</div>
+          <div class="flex items-center gap-2"><span class="legend-dot bg-yellow-300 border border-yellow-700"></span>ฟอสโฟลิพิด (Phospholipid head)</div>
+          <div class="flex items-center gap-2"><span class="legend-dot bg-emerald-500"></span>โปรตีนตัวพา (Carrier Protein)</div>
+        </div>
+        <div id="legendActive" class="hidden text-xs space-y-1.5 text-slate-600">
+          <div class="flex items-center gap-2"><span class="ion-chip bg-orange-500">Na⁺</span>โซเดียมไอออน (+1) — มีประจุ ไม่ผ่าน bilayer</div>
+          <div class="flex items-center gap-2"><span class="ion-chip bg-violet-500">K⁺</span>โพแทสเซียมไอออน (+1) — มีประจุ ไม่ผ่าน bilayer</div>
+          <div class="flex items-center gap-2"><span class="ion-chip bg-cyan-500">Cl⁻</span>คลอไรด์ไอออน (-1) — ผ่านช่อง Cl⁻ ตามไล่ระดับ</div>
+          <div class="flex items-center gap-2"><span class="legend-dot bg-blue-500"></span>โมเลกุลน้ำ (ผ่าน aquaporin / bilayer ได้)</div>
+          <div class="flex items-center gap-2"><span class="legend-dot bg-amber-400" style="clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)"></span>พลังงาน ATP (สลายเป็น ADP)</div>
+          <div class="flex items-center gap-2"><span class="legend-dot bg-teal-600"></span>Na⁺/K⁺ ATPase Pump</div>
+          <div class="flex items-center gap-2"><span class="legend-dot bg-cyan-700"></span>Cl⁻ channel (passive)</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ CENTER: CANVAS ============ -->
+    <main class="lg:col-span-6">
+      <div class="bg-white rounded-2xl shadow-md p-3 relative">
+        <canvas id="sim" class="w-full rounded-xl block" style="aspect-ratio: 8/5; background:#f8fafc;"></canvas>
+        <div class="absolute top-5 left-5 bg-blue-100/80 backdrop-blur px-2 py-1 rounded text-xs font-bold text-blue-900 pointer-events-none">นอกเซลล์ · Extracellular</div>
+        <div class="absolute top-5 right-5 bg-rose-100/80 backdrop-blur px-2 py-1 rounded text-xs font-bold text-rose-900 pointer-events-none">ในเซลล์ · Intracellular (Cytoplasm)</div>
+        <div id="tonicityBadge" class="absolute bottom-5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold hidden"></div>
+        <div id="pumpStateBadge" class="absolute top-2 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[10px] font-bold hidden bg-teal-100 text-teal-900 border border-teal-300"></div>
+      </div>
+
+      <!-- Description below canvas -->
+      <div class="bg-white rounded-2xl shadow-md p-4 mt-4">
+        <h3 class="font-bold text-slate-700 mb-1 text-sm flex items-center gap-2">
+          <span class="w-2 h-2 bg-indigo-500 rounded-full"></span>คำอธิบายและสรุปผล
+        </h3>
+        <p id="liveDescription" class="text-slate-600 text-sm leading-relaxed"></p>
+      </div>
+    </main>
+
+    <!-- ============ RIGHT: DATA ============ -->
+    <aside class="lg:col-span-3 space-y-4">
+      <div class="bg-white rounded-2xl shadow-md p-4">
+        <h2 class="font-bold text-slate-700 mb-3 flex items-center gap-2">
+          <span class="w-2 h-2 bg-rose-500 rounded-full"></span>ข้อมูลแบบเรียลไทม์
+        </h2>
+
+        <!-- Default stats (non-active modes) -->
+        <div id="statsDefault" class="grid grid-cols-2 gap-2 mb-3">
+          <div class="stat-card rounded-lg p-2 border border-blue-100">
+            <div class="text-[10px] text-blue-700 font-semibold">นอกเซลล์</div>
+            <div id="liveOut" class="text-xl font-bold text-blue-700">0</div>
+            <div class="text-[10px] text-slate-400">โมเลกุลสาร</div>
+          </div>
+          <div class="stat-card rounded-lg p-2 border border-rose-100">
+            <div class="text-[10px] text-rose-700 font-semibold">ในเซลล์</div>
+            <div id="liveIn" class="text-xl font-bold text-rose-700">0</div>
+            <div class="text-[10px] text-slate-400">โมเลกุลสาร</div>
+          </div>
+        </div>
+
+        <!-- Ion stats (active mode) -->
+        <div id="statsIons" class="hidden mb-3">
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <div class="stat-card rounded-lg p-2 border border-orange-200">
+              <div class="text-[10px] text-orange-700 font-semibold">Na⁺ นอกเซลล์</div>
+              <div id="liveNaOut" class="text-lg font-bold text-orange-700">0</div>
+            </div>
+            <div class="stat-card rounded-lg p-2 border border-orange-200">
+              <div class="text-[10px] text-orange-700 font-semibold">Na⁺ ในเซลล์</div>
+              <div id="liveNaIn" class="text-lg font-bold text-orange-700">0</div>
+            </div>
+            <div class="stat-card rounded-lg p-2 border border-violet-200">
+              <div class="text-[10px] text-violet-700 font-semibold">K⁺ นอกเซลล์</div>
+              <div id="liveKOut" class="text-lg font-bold text-violet-700">0</div>
+            </div>
+            <div class="stat-card rounded-lg p-2 border border-violet-200">
+              <div class="text-[10px] text-violet-700 font-semibold">K⁺ ในเซลล์</div>
+              <div id="liveKIn" class="text-lg font-bold text-violet-700">0</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="stat-card rounded-lg p-2 border border-cyan-200">
+              <div class="text-[10px] text-cyan-700 font-semibold">Cl⁻ นอกเซลล์</div>
+              <div id="liveClOut" class="text-lg font-bold text-cyan-700">0</div>
+            </div>
+            <div class="stat-card rounded-lg p-2 border border-cyan-200">
+              <div class="text-[10px] text-cyan-700 font-semibold">Cl⁻ ในเซลล์</div>
+              <div id="liveClIn" class="text-lg font-bold text-cyan-700">0</div>
+            </div>
+          </div>
+          <div class="text-[10px] text-slate-500 mt-2 bg-slate-50 p-2 rounded border border-slate-200">
+            <div class="flex justify-between items-center mb-1">
+              <b>Membrane Potential</b>
+              <span id="membranePot" class="font-mono font-bold text-slate-800">0 mV</span>
+            </div>
+            <!-- MP gauge: -100 .. +50 mV (0% = -100, 67% = 0, 100% = +50) -->
+            <div class="relative h-3 rounded overflow-hidden" style="background: linear-gradient(90deg, #1e3a8a 0%, #60a5fa 33%, #f1f5f9 67%, #fecaca 100%);">
+              <!-- "rest" marker at -70 mV → (30/150)*100% = 20% -->
+              <div class="absolute top-0 h-full" style="width:2px; left:20%; background:repeating-linear-gradient(0deg,#475569 0 2px,transparent 2px 4px);"></div>
+              <div id="mpIndicator" class="absolute top-0 h-full bg-slate-900 transition-all" style="width:3px; left:67%;"></div>
+            </div>
+            <div class="relative text-[8px] text-slate-500 mt-0.5 h-3">
+              <span class="absolute" style="left:0%;">-100</span>
+              <span class="absolute text-slate-700 font-semibold" style="left:18%;">↑-70</span>
+              <span class="absolute" style="left:65%;">0</span>
+              <span class="absolute" style="right:0%;">+50</span>
+            </div>
+          </div>
+
+          <!-- Cycle Progress -->
+          <div class="mt-2 bg-teal-50 border border-teal-200 rounded p-2">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-[10px] font-bold text-teal-800">รอบ Pump ปัจจุบัน</span>
+              <span class="text-[10px] text-teal-700 font-mono"><span id="cycleStepNum">1</span>/9</span>
+            </div>
+            <div id="cycleStepName" class="text-[10px] text-teal-700 mb-1 leading-tight">E1 · จับ Na⁺ จากในเซลล์</div>
+            <div class="grid grid-cols-3 gap-1">
+              <div class="bg-orange-100 border border-orange-200 rounded p-1 text-center">
+                <div class="text-[9px] text-orange-800 font-semibold">Na⁺ ออก</div>
+                <div class="text-[11px] text-orange-700 font-bold"><span id="naCycleCount">0</span>/3</div>
+              </div>
+              <div class="bg-violet-100 border border-violet-200 rounded p-1 text-center">
+                <div class="text-[9px] text-violet-800 font-semibold">K⁺ เข้า</div>
+                <div class="text-[11px] text-violet-700 font-bold"><span id="kCycleCount">0</span>/2</div>
+              </div>
+              <div class="bg-amber-100 border border-amber-200 rounded p-1 text-center">
+                <div class="text-[9px] text-amber-800 font-semibold">ATP ใช้</div>
+                <div class="text-[11px] text-amber-700 font-bold"><span id="atpCycleCount">0</span>/1</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="bg-slate-50 rounded-lg p-2 border border-slate-200">
+          <div class="text-[10px] text-slate-500 mb-1 flex justify-between">
+            <span>กราฟความเข้มข้นตามเวลา</span>
+            <span id="timeLabel" class="font-mono">0.0 s</span>
+          </div>
+          <canvas id="chart" class="w-full" style="height:140px;"></canvas>
+          <div id="chartLegend" class="text-[10px] flex gap-2 justify-center mt-1 flex-wrap">
+            <span class="flex items-center gap-1"><span class="legend-dot bg-blue-500" style="width:8px;height:8px"></span>นอกเซลล์</span>
+            <span class="flex items-center gap-1"><span class="legend-dot bg-rose-500" style="width:8px;height:8px"></span>ในเซลล์</span>
+          </div>
+        </div>
+
+        <!-- Counters -->
+        <div class="mt-3 space-y-2">
+          <div class="flex justify-between items-center bg-amber-50 border border-amber-200 rounded-lg p-2">
+            <span class="text-xs font-semibold text-amber-800">ATP คงเหลือ</span>
+            <span id="atpLive" class="text-lg font-bold text-amber-700">0</span>
+          </div>
+          <div class="flex justify-between items-center bg-amber-50 border border-amber-200 rounded-lg p-2">
+            <span class="text-xs font-semibold text-amber-800">ATP ที่ใช้ไป</span>
+            <span id="atpUsed" class="text-lg font-bold text-amber-700">0</span>
+          </div>
+          <div class="flex justify-between items-center bg-emerald-50 border border-emerald-200 rounded-lg p-2">
+            <span class="text-xs font-semibold text-emerald-800">รอบการปั๊ม (Cycles)</span>
+            <span id="cycles" class="text-lg font-bold text-emerald-700">0</span>
+          </div>
+          <div class="flex justify-between items-center bg-slate-50 border border-slate-200 rounded-lg p-2">
+            <span class="text-xs font-semibold text-slate-800">ไอออนผ่านเยื่อ</span>
+            <span id="crossed" class="text-lg font-bold text-slate-700">0</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <footer class="text-center text-xs text-slate-400 mt-6">
+    Educational simulation · พัฒนาสำหรับการเรียนวิทยาศาสตร์ ม.ปลาย/มหาวิทยาลัย · อ้างอิงจาก IB BioNinja & OpenStax Anatomy
+  </footer>
+</div>
+
+<script>
+'use strict';
+
+/* =========================================================
+   CONSTANTS
+   ========================================================= */
+const PARTICLE = { WATER: 'water', SOLUTE: 'solute', ATP: 'atp', ION: 'ion' };
+
+const ION = {
+  Na: { name: 'Na',  symbol: 'Na⁺', color: '#f97316', edge: '#9a3412', r: 9, charge: +1 },
+  K:  { name: 'K',   symbol: 'K⁺',  color: '#8b5cf6', edge: '#5b21b6', r: 10, charge: +1 },
+  Cl: { name: 'Cl',  symbol: 'Cl⁻', color: '#06b6d4', edge: '#0e7490', r: 9, charge: -1 },
+};
+
+const COLORS = {
+  outBg: '#dbeafe',
+  inBg: '#ffe4e6',
+  midBg: '#fef9c3',
+  water: '#3b82f6',
+  solute: '#ef4444',
+  atp: '#fbbf24',
+  adp: '#fde68a',
+  phHead: '#fde047',
+  phHeadEdge: '#a16207',
+  phTail: '#7c2d12',
+};
+
+const TOTAL_SOLUTE = 60;
+const TOTAL_WATER  = 40;
+const TOTAL_NA     = 36;   // enough for several full pump cycles
+const TOTAL_K      = 36;
+const TOTAL_CL     = 14;
+
+/* =========================================================
+   STATE
+   ========================================================= */
+const State = {
+  mode: 'simple',
+  running: false,
+  speed: 1,
+  outConc: 70,
+  inConc: 30,
+  particles: [],
+  pumps: [],
+  channels: [],          // Cl- channels (passive)
+  atpUsed: 0,
+  cycles: 0,             // Na/K pump full cycles
+  crossedCount: 0,
+  history: [],
+  time: 0,
+  atpRate: 2,
+  atpAccumulator: 0,
+  ouabainActive: false,  // cardiac glycoside that inhibits Na⁺/K⁺ ATPase
+};
+
+/* =========================================================
+   CANVAS SETUP
+   ========================================================= */
+const cvs = document.getElementById('sim');
+const ctx = cvs.getContext('2d');
+const chartCvs = document.getElementById('chart');
+const chartCtx = chartCvs.getContext('2d');
+
+let W = 800, H = 500;
+let MEM_X = 400;
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = cvs.getBoundingClientRect();
+  cvs.width  = Math.round(r.width  * dpr);
+  cvs.height = Math.round(r.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  W = r.width;
+  H = r.height;
+  MEM_X = W / 2;
+
+  const rc = chartCvs.getBoundingClientRect();
+  chartCvs.width  = Math.round(rc.width  * dpr);
+  chartCvs.height = Math.round(rc.height * dpr);
+  chartCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', () => { resizeCanvas(); });
+
+/* =========================================================
+   PARTICLE
+   ========================================================= */
+class Particle {
+  constructor(type, x, y, opts = {}) {
+    this.type = type;
+    this.ion = opts.ion || null;        // 'Na' | 'K' | 'Cl' if type is ION
+    this.x = x; this.y = y;
+    const sp = type === PARTICLE.WATER ? 1.4 : type === PARTICLE.ATP ? 1.0 : 1.0;
+    const a = Math.random() * Math.PI * 2;
+    this.vx = Math.cos(a) * sp;
+    this.vy = Math.sin(a) * sp;
+    if (type === PARTICLE.ION) this.r = ION[this.ion].r;
+    else if (type === PARTICLE.WATER) this.r = 4;
+    else if (type === PARTICLE.ATP) this.r = 9;
+    else this.r = 6;
+    this.crossing = false;
+    this.lockedUntil = 0;
+    this.dead = false;
+    this.depleted = false;
+    this.spin = Math.random() * Math.PI * 2;
+    this._fade = 0;
+  }
+  side() { return this.x < MEM_X ? 'out' : 'in'; }
+  charge() { return this.type === PARTICLE.ION ? ION[this.ion].charge : 0; }
+
+  update(dt) {
+    if (this.crossing) return;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+
+    if (this.x < this.r) { this.x = this.r; this.vx *= -1; }
+    if (this.x > W - this.r) { this.x = W - this.r; this.vx *= -1; }
+    if (this.y < this.r) { this.y = this.r; this.vy *= -1; }
+    if (this.y > H - this.r) { this.y = H - this.r; this.vy *= -1; }
+
+    this.vx += (Math.random() - 0.5) * 0.15;
+    this.vy += (Math.random() - 0.5) * 0.15;
+    const s = Math.hypot(this.vx, this.vy);
+    const max = this.type === PARTICLE.WATER ? 2.2 : (this.type === PARTICLE.ION ? 1.4 : 1.6);
+    if (s > max) { this.vx = this.vx/s*max; this.vy = this.vy/s*max; }
+
+    this.spin += 0.04;
+  }
+
+  draw(ctx) {
+    if (this.type === PARTICLE.WATER) {
+      ctx.fillStyle = COLORS.water;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.7)';
+      ctx.beginPath(); ctx.arc(this.x-1.5, this.y-1.5, 1.2, 0, Math.PI*2); ctx.fill();
+    } else if (this.type === PARTICLE.SOLUTE) {
+      ctx.fillStyle = COLORS.solute;
+      ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#7f1d1d'; ctx.lineWidth = 1; ctx.stroke();
+    } else if (this.type === PARTICLE.ATP) {
+      drawStar(ctx, this.x, this.y, this.spin, this.depleted ? COLORS.adp : COLORS.atp, this.depleted);
+    } else if (this.type === PARTICLE.ION) {
+      this.drawIon(ctx);
+    }
+  }
+
+  drawIon(ctx) {
+    const def = ION[this.ion];
+    // glow halo for charge (subtle)
+    const gradient = ctx.createRadialGradient(this.x, this.y, 1, this.x, this.y, this.r + 4);
+    gradient.addColorStop(0, def.color);
+    gradient.addColorStop(0.7, def.color);
+    gradient.addColorStop(1, def.color + '00');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r + 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // main body
+    ctx.fillStyle = def.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = def.edge;
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    // ion label
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px Sarabun, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(def.symbol, this.x, this.y + 0.5);
+  }
+}
+
+function drawStar(ctx, x, y, rot, color, depleted) {
+  const outerR = 9, innerR = 4;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(rot);
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const a = (Math.PI / 5) * i - Math.PI/2;
+    const px = Math.cos(a) * r, py = Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = color; ctx.fill();
+  ctx.strokeStyle = depleted ? '#a16207' : '#92400e';
+  ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.fillStyle = depleted ? '#92400e' : '#78350f';
+  ctx.font = 'bold 7px Sarabun, sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(depleted ? 'ADP' : 'ATP', 0, 0.5);
+  ctx.restore();
+}
+
+/* =========================================================
+   GENERIC CARRIER PUMP (facilitated)
+   ========================================================= */
+class Pump {
+  constructor(y) {
+    this.y = y;
+    this.angle = 0;
+    this.targetAngle = 0;
+    this.state = 'idle';
+    this.timer = 0;
+    this.bound = null;
+    this.hl = 0;
+    this.facing = 'out';
+  }
+  preferredOpenSide(outC, inC) {
+    if (outC > inC) return 'out';
+    if (inC > outC) return 'in';
+    return 'out';
+  }
+  reset() { this.state='idle'; this.bound=null; this.timer=0; this.targetAngle=this.angle; }
+  update(dt) {
+    this.angle += (this.targetAngle - this.angle) * Math.min(1, dt * 0.006);
+    this.hl = Math.max(0, this.hl - dt * 0.003);
+    const pickup = this.preferredOpenSide(State.outConc, State.inConc);
+    const deliver = pickup === 'out' ? 'in' : 'out';
+
+    if (this.state === 'idle') {
+      this.targetAngle = pickup === 'out' ? 0 : 1;
+      this.facing = pickup;
+      this.tryGrabSolute(pickup);
+    } else if (this.state === 'bound') {
+      this.movePartTo(this.bound, MEM_X, this.y, dt);
+      this.timer += dt;
+      if (this.timer > 350) {
+        this.state = 'flipping';
+        this.timer = 0;
+        this.targetAngle = deliver === 'out' ? 0 : 1;
+        this.hl = 1;
+      }
+    } else if (this.state === 'flipping') {
+      if (this.bound) this.movePartTo(this.bound, MEM_X, this.y, dt);
+      this.timer += dt;
+      if (Math.abs(this.angle - this.targetAngle) < 0.08 && this.timer > 200) {
+        this.state = 'release'; this.timer = 0;
+        if (this.bound) {
+          const side = deliver === 'out' ? -1 : 1;
+          this.bound.x = MEM_X + side * 38;
+          this.bound.y = this.y + (Math.random()-0.5)*14;
+          this.bound.vx = side * (Math.random()*1.3 + 0.6);
+          this.bound.vy = (Math.random()-0.5) * 1.4;
+          this.bound.crossing = false;
+          this.bound.lockedUntil = State.time + 500;
+          State.crossedCount++;
+          this.bound = null;
+        }
+      }
+    } else if (this.state === 'release') {
+      this.timer += dt;
+      if (this.timer > 220) { this.state = 'idle'; this.timer = 0; }
+    }
+  }
+  tryGrabSolute(side) {
+    for (const p of State.particles) {
+      if (p.type !== PARTICLE.SOLUTE || p.crossing || p.dead) continue;
+      if (p.lockedUntil > State.time) continue;
+      const onSide = (side === 'out' && p.x < MEM_X) || (side === 'in' && p.x > MEM_X);
+      if (!onSide) continue;
+      const d = Math.hypot(p.x - MEM_X, p.y - this.y);
+      if (d < 40) {
+        this.bound = p; p.crossing = true;
+        this.state = 'bound'; this.timer = 0; this.hl = 1;
+        return true;
+      }
+    }
+    return false;
+  }
+  movePartTo(p, tx, ty, dt) {
+    if (!p) return;
+    const k = Math.min(1, dt * 0.015);
+    p.x += (tx - p.x) * k;
+    p.y += (ty - p.y) * k;
+    p.vx = p.vy = 0;
+  }
+  draw(ctx) { drawTwoHalfPump(ctx, this, '#06b6d4', '#155e75', '#67e8f9'); }
+}
+
+/* =========================================================
+   Na+/K+ ATPase PUMP — realistic cycle
+   States:
+     E1_open      : open to inside, empty, looking for Na+
+     E1_3Na       : 3 Na+ bound, waiting ATP
+     E1_ATP       : ATP bound, phosphorylating
+     E1_to_E2     : conformational change (flipping outward)
+     E2_release   : open to outside, releasing Na+
+     E2_open      : open to outside, looking for K+
+     E2_2K        : 2 K+ bound, releasing ADP
+     E2_to_E1     : flipping back inward
+     E1_release_K : open to inside, releasing K+
+   ========================================================= */
+class NaKPump {
+  constructor(y) {
+    this.y = y;
+    this.angle = 1;
+    this.targetAngle = 1;
+    this.state = 'E1_open';
+    this.timer = 0;
+    this.boundNa = [];
+    this.boundK = [];
+    this.atp = null;
+    this.hl = 0;
+    this.label = 'E1 · จับ Na⁺';
+    // === FIXED biological direction — Na⁺/K⁺ ATPase is a directional protein ===
+    // Per IB BioNinja & OpenStax, the protein structure dictates a fixed cycle:
+    //   • E1 conformation opens to cytoplasm  → binds Na⁺ from inside, releases K⁺ to inside
+    //   • E2 conformation opens to extracellular → releases Na⁺ to outside, binds K⁺ from outside
+    // Stoichiometry per cycle: 3 Na⁺ OUT, 2 K⁺ IN, 1 ATP hydrolysed.
+    // The "against gradient" property emerges from physiological initial conditions
+    // (Na⁺ HIGH outside, K⁺ HIGH inside) — sliders are restricted to ≥50% to ensure this.
+    this.E1Side = 'in';   // FIXED — cytoplasmic side
+    this.E2Side = 'out';  // FIXED — extracellular side
+
+    // === Per-cycle stoichiometry counters (reset every cycle) ===
+    this.naMovedThisCycle = 0;   // target 3
+    this.kMovedThisCycle  = 0;   // target 2
+    this.atpUsedThisCycle = 0;   // target 1
+    this.pulseNa = 0;            // visual pulse when Na⁺ is released (0..1)
+    this.pulseK  = 0;            // visual pulse when K⁺ is released
+  }
+
+  reset() {
+    this.state = 'E1_open';
+    this.timer = 0;
+    this.boundNa = [];
+    this.boundK = [];
+    this.atp = null;
+    this.naMovedThisCycle = 0;
+    this.kMovedThisCycle  = 0;
+    this.atpUsedThisCycle = 0;
+    this.pulseNa = 0;
+    this.pulseK = 0;
+    this.angle = this.sideToAngle(this.E1Side);
+    this.targetAngle = this.angle;
+    this.label = 'E1 · จับ Na⁺';
+  }
+
+  // Step number (1–9) for the current state — used by the HUD progress indicator
+  stepNumber() {
+    return ({
+      'E1_open':       1,
+      'E1_3Na':        2,
+      'E1_ATP':        3,
+      'E1_to_E2':      4,
+      'E2_release':    5,
+      'E2_open':       6,
+      'E2_2K':         7,
+      'E2_to_E1':      8,
+      'E1_release_K':  9,
+    })[this.state] || 1;
+  }
+
+  sideToAngle(side) { return side === 'in' ? 1 : 0; }
+
+  naSlot(i) {
+    const slots = [[-9, -10], [9, -10], [0, 8]];
+    return [MEM_X + slots[i][0], this.y + slots[i][1]];
+  }
+  kSlot(i) {
+    const slots = [[-9, -2], [9, -2]];
+    return [MEM_X + slots[i][0], this.y + slots[i][1]];
+  }
+  atpSlot() {
+    // ATP cavity opens toward the cytoplasmic face (E1Side) since ATP is intracellular
+    const x = this.E1Side === 'in' ? MEM_X + 22 : MEM_X - 22;
+    return [x, this.y + 22];
+  }
+
+  // Position where ion is ejected to given side
+  releasePos(side) {
+    return side === 'in'
+      ? { x: MEM_X + 44, dir:  1 }
+      : { x: MEM_X - 44, dir: -1 };
+  }
+
+  // Concentration-aware gradient labels
+  gradLabelFor(ion, side) {
+    const out = countIon(ion, 'out'), inC = countIon(ion, 'in');
+    if (side === 'in')  return inC < out ? 'Low' : (inC > out ? 'High' : 'Eq');
+    else                return out < inC ? 'Low' : (out > inC ? 'High' : 'Eq');
+  }
+
+  update(dt) {
+    this.angle += (this.targetAngle - this.angle) * Math.min(1, dt * 0.005);
+    this.hl = Math.max(0, this.hl - dt * 0.003);
+    this.pulseNa = Math.max(0, this.pulseNa - dt * 0.002);
+    this.pulseK  = Math.max(0, this.pulseK  - dt * 0.002);
+
+    // Ouabain irreversibly inhibits the pump — freeze the cycle state.
+    // Bound ions stay locked in place (still hold them), conformation does not change.
+    if (State.ouabainActive) {
+      this.label = '🚫 INHIBITED by Ouabain · pump locked';
+      // keep bound ions snapped in cavity
+      for (let i = 0; i < this.boundNa.length; i++) {
+        const [tx, ty] = this.naSlot(i);
+        this.movePartTo(this.boundNa[i], tx, ty, dt);
+      }
+      for (let i = 0; i < this.boundK.length; i++) {
+        const [tx, ty] = this.kSlot(i);
+        this.movePartTo(this.boundK[i], tx, ty, dt);
+      }
+      if (this.atp) {
+        const [tx, ty] = this.atpSlot();
+        this.movePartTo(this.atp, tx, ty, dt);
+      }
+      return;
+    }
+
+    for (let i = 0; i < this.boundNa.length; i++) {
+      const [tx, ty] = this.naSlot(i);
+      this.movePartTo(this.boundNa[i], tx, ty, dt);
+    }
+    for (let i = 0; i < this.boundK.length; i++) {
+      const [tx, ty] = this.kSlot(i);
+      this.movePartTo(this.boundK[i], tx, ty, dt);
+    }
+    if (this.atp) {
+      const [tx, ty] = this.atpSlot();
+      this.movePartTo(this.atp, tx, ty, dt);
+    }
+
+    this.timer += dt;
+
+    switch (this.state) {
+      case 'E1_open': {
+        this.targetAngle = this.sideToAngle(this.E1Side);
+        const sn = this.E1Side === 'in' ? 'ในเซลล์' : 'นอกเซลล์';
+        const gl = this.gradLabelFor('Na', this.E1Side);
+        this.label = `E1 · จับ Na⁺ จาก${sn} (${gl}) ${this.boundNa.length}/3`;
+        if (this.boundNa.length < 3) {
+          const ion = this.findIon('Na', this.E1Side);
+          if (ion) {
+            this.boundNa.push(ion);
+            ion.crossing = true;
+            this.hl = 1;
+            this.timer = 0;
+          }
+        } else {
+          this.state = 'E1_3Na'; this.timer = 0;
+        }
+        break;
+      }
+      case 'E1_3Na': {
+        this.label = 'E1 · 3Na⁺ จับครบ · รอ ATP';
+        if (!this.atp) {
+          const a = this.findATP();
+          if (a) {
+            this.atp = a;
+            a.crossing = true;
+            this.hl = 1;
+            this.state = 'E1_ATP'; this.timer = 0;
+          }
+        }
+        break;
+      }
+      case 'E1_ATP': {
+        this.label = 'ATP จับ → Phosphorylation';
+        if (this.timer > 600) {
+          if (this.atp) {
+            this.atp.depleted = true;
+            State.atpUsed++;
+            this.atpUsedThisCycle = 1;
+          }
+          this.state = 'E1_to_E2'; this.timer = 0;
+          this.targetAngle = this.sideToAngle(this.E2Side);
+          this.hl = 1;
+        }
+        break;
+      }
+      case 'E1_to_E2': {
+        this.label = '⟳ Conformational change → E2';
+        if (Math.abs(this.angle - this.sideToAngle(this.E2Side)) < 0.05 && this.timer > 350) {
+          this.state = 'E2_release'; this.timer = 0;
+        }
+        break;
+      }
+      case 'E2_release': {
+        const sn = this.E2Side === 'out' ? 'นอกเซลล์' : 'ในเซลล์';
+        const gl = this.gradLabelFor('Na', this.E2Side);
+        this.label = `E2 · ปล่อย Na⁺ ไป${sn} (${gl}) ${3 - this.boundNa.length}/3`;
+        if (this.boundNa.length > 0 && this.timer > 180) {
+          const pos = this.releasePos(this.E2Side);
+          const ion = this.boundNa.shift();
+          ion.crossing = false;
+          ion.x = pos.x;
+          ion.y = this.y + (Math.random() - 0.5) * 20;
+          ion.vx = pos.dir * (Math.random() * 1.3 + 0.6);
+          ion.vy = (Math.random() - 0.5) * 1.4;
+          ion.lockedUntil = State.time + 600;
+          State.crossedCount++;
+          this.naMovedThisCycle++;
+          this.pulseNa = 1;
+          this.timer = 0;
+        }
+        if (this.boundNa.length === 0) {
+          this.state = 'E2_open'; this.timer = 0;
+        }
+        break;
+      }
+      case 'E2_open': {
+        const sn = this.E2Side === 'in' ? 'ในเซลล์' : 'นอกเซลล์';
+        const gl = this.gradLabelFor('K', this.E2Side);
+        this.label = `E2 · จับ K⁺ จาก${sn} (${gl}) ${this.boundK.length}/2`;
+        if (this.boundK.length < 2) {
+          const ion = this.findIon('K', this.E2Side);
+          if (ion) {
+            this.boundK.push(ion);
+            ion.crossing = true;
+            this.hl = 1;
+            this.timer = 0;
+          }
+        } else {
+          this.state = 'E2_2K'; this.timer = 0;
+        }
+        break;
+      }
+      case 'E2_2K': {
+        this.label = 'E2 · 2K⁺ จับครบ · ปล่อย ADP+Pi';
+        if (this.timer > 500) {
+          if (this.atp) {
+            const a = this.atp;
+            a.crossing = false;
+            a.x = this.E2Side === 'out' ? MEM_X - 30 : MEM_X + 30;
+            a.y = this.y + 34;
+            a.vx = this.E2Side === 'out' ? -(Math.random()*0.8 + 0.3) : (Math.random()*0.8 + 0.3);
+            a.vy = Math.random() * 0.5 + 0.3;
+            a.dead = true;
+            this.atp = null;
+          }
+          this.state = 'E2_to_E1'; this.timer = 0;
+          this.targetAngle = this.sideToAngle(this.E1Side);
+          this.hl = 1;
+        }
+        break;
+      }
+      case 'E2_to_E1': {
+        this.label = '⟳ Conformational change → E1';
+        if (Math.abs(this.angle - this.sideToAngle(this.E1Side)) < 0.05 && this.timer > 350) {
+          this.state = 'E1_release_K'; this.timer = 0;
+        }
+        break;
+      }
+      case 'E1_release_K': {
+        const sn = this.E1Side === 'in' ? 'ในเซลล์' : 'นอกเซลล์';
+        const gl = this.gradLabelFor('K', this.E1Side);
+        this.label = `E1 · ปล่อย K⁺ ไป${sn} (${gl}) ${2 - this.boundK.length}/2`;
+        if (this.boundK.length > 0 && this.timer > 180) {
+          const pos = this.releasePos(this.E1Side);
+          const ion = this.boundK.shift();
+          ion.crossing = false;
+          ion.x = pos.x;
+          ion.y = this.y + (Math.random() - 0.5) * 20;
+          ion.vx = pos.dir * (Math.random() * 1.3 + 0.6);
+          ion.vy = (Math.random() - 0.5) * 1.4;
+          ion.lockedUntil = State.time + 600;
+          State.crossedCount++;
+          this.kMovedThisCycle++;
+          this.pulseK = 1;
+          this.timer = 0;
+        }
+        if (this.boundK.length === 0) {
+          State.cycles++;
+          // Reset per-cycle stoichiometry counters for next cycle
+          this.naMovedThisCycle = 0;
+          this.kMovedThisCycle  = 0;
+          this.atpUsedThisCycle = 0;
+          this.state = 'E1_open'; this.timer = 0;
+        }
+        break;
+      }
+    }
+  }
+
+  findIon(subtype, side) {
+    let best = null, bestD = 1e9;
+    for (const p of State.particles) {
+      if (p.type !== PARTICLE.ION || p.ion !== subtype) continue;
+      if (p.crossing || p.dead) continue;
+      if (p.lockedUntil > State.time) continue;
+      const onSide = (side === 'out' && p.x < MEM_X) || (side === 'in' && p.x > MEM_X);
+      if (!onSide) continue;
+      const d = Math.hypot(p.x - MEM_X, p.y - this.y);
+      if (d < 55 && d < bestD) { best = p; bestD = d; }
+    }
+    return best;
+  }
+  findATP() {
+    // ATP is intracellular — searches the cytoplasmic side, which is E1Side
+    let best = null, bestD = 1e9;
+    for (const p of State.particles) {
+      if (p.type !== PARTICLE.ATP) continue;
+      if (p.crossing || p.dead || p.depleted) continue;
+      // ATP is intracellular; in this simulation it sits on the 'in' side (right) by spawn
+      if (p.x < MEM_X) continue;
+      const d = Math.hypot(p.x - MEM_X, p.y - (this.y + 22));
+      if (d < 80 && d < bestD) { best = p; bestD = d; }
+    }
+    return best;
+  }
+  movePartTo(p, tx, ty, dt) {
+    if (!p) return;
+    const k = Math.min(1, dt * 0.015);
+    p.x += (tx - p.x) * k; p.y += (ty - p.y) * k;
+    p.vx = p.vy = 0;
+  }
+
+  draw(ctx) {
+    // Pulse halos when an ion was just released this frame
+    if (this.pulseNa > 0.05) {
+      ctx.save();
+      ctx.globalAlpha = this.pulseNa * 0.6;
+      ctx.fillStyle = '#f97316';
+      ctx.beginPath();
+      ctx.arc(MEM_X - 30, this.y, 30 * this.pulseNa + 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    if (this.pulseK > 0.05) {
+      ctx.save();
+      ctx.globalAlpha = this.pulseK * 0.6;
+      ctx.fillStyle = '#8b5cf6';
+      ctx.beginPath();
+      ctx.arc(MEM_X + 30, this.y, 30 * this.pulseK + 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    // Use a desaturated colour when inhibited by ouabain
+    const inhibited = State.ouabainActive;
+    drawTwoHalfPump(ctx, this,
+      inhibited ? '#6b7280' : '#0d9488',
+      inhibited ? '#374151' : '#134e4a',
+      inhibited ? '#9ca3af' : '#5eead4',
+      'Na⁺/K⁺ ATPase');
+    if (!inhibited) drawPumpArrows(ctx, this);
+
+    // Step badge under the pump
+    ctx.save();
+    ctx.fillStyle = inhibited ? '#9f1239' : '#0f766e';
+    ctx.font = 'bold 9px Sarabun, sans-serif';
+    ctx.textAlign = 'center';
+    if (inhibited) ctx.fillText('🚫 BLOCKED', MEM_X, this.y + 50);
+    else ctx.fillText(`Step ${this.stepNumber()}/9`, MEM_X, this.y + 50);
+    ctx.restore();
+
+    // Overlay red X when inhibited
+    if (inhibited) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(220, 38, 38, 0.85)';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(MEM_X - 18, this.y - 18);
+      ctx.lineTo(MEM_X + 18, this.y + 18);
+      ctx.moveTo(MEM_X + 18, this.y - 18);
+      ctx.lineTo(MEM_X - 18, this.y + 18);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+// Draws fixed direction arrows on the pump: Na⁺ always OUT (←), K⁺ always IN (→)
+function drawPumpArrows(ctx, pump) {
+  const y = pump.y;
+  ctx.save();
+  ctx.font = 'bold 9px Sarabun, sans-serif';
+  ctx.textAlign = 'center';
+  // Na⁺ arrow above pump — moving OUT (leftward in our layout)
+  ctx.fillStyle = '#9a3412';
+  ctx.fillText('Na⁺ ←', MEM_X - 22, y - 24);
+  // K⁺ arrow below pump — moving IN (rightward)
+  ctx.fillStyle = '#5b21b6';
+  ctx.fillText('K⁺ →', MEM_X + 22, y + 32);
+  ctx.restore();
+}
+
+/* =========================================================
+   Cl- channel — passive, only Cl- can pass, follows gradient
+   ========================================================= */
+class ClChannel {
+  constructor(y) {
+    this.y = y;
+    this.openProgress = 0;        // 0..1 always somewhat open
+    this.hl = 0;
+  }
+  reset() { this.hl = 0; }
+  update(dt) {
+    this.openProgress = 0.6 + 0.4 * Math.sin(State.time * 0.002 + this.y);
+    this.hl = Math.max(0, this.hl - dt * 0.003);
+    // Try to pass Cl- that hits us
+    for (const p of State.particles) {
+      if (p.type !== PARTICLE.ION || p.ion !== 'Cl') continue;
+      if (p.crossing || p.dead) continue;
+      if (p.lockedUntil > State.time) continue;
+      const d = Math.hypot(p.x - MEM_X, p.y - this.y);
+      if (d < 20) {
+        const clOut = countIon('Cl', 'out'), clIn = countIon('Cl', 'in');
+        const going = p.x >= MEM_X ? 'out' : 'in'; // ion is heading TOWARD other side
+        const targetSide = p.x >= MEM_X ? 'out' : 'in';
+        // probability higher toward lower concentration
+        let prob = 0.4;
+        if (targetSide === 'in' && clIn < clOut) prob = 0.7;
+        else if (targetSide === 'out' && clOut < clIn) prob = 0.7;
+        else prob = 0.18;
+        if (Math.random() < prob) {
+          // let it through (push to other side near this channel)
+          if (targetSide === 'in') {
+            p.x = MEM_X + 30;
+            p.vx = Math.random()*0.8 + 0.4;
+          } else {
+            p.x = MEM_X - 30;
+            p.vx = -(Math.random()*0.8 + 0.4);
+          }
+          p.y = this.y + (Math.random()-0.5)*8;
+          p.lockedUntil = State.time + 400;
+          State.crossedCount++;
+          this.hl = 1;
+        } else {
+          // bounce
+          p.vx *= -1;
+          p.x += p.vx * 2;
+        }
+      }
+    }
+  }
+  draw(ctx) {
+    const cx = MEM_X, cy = this.y;
+    const w = 36, h = 50, gap = 8 + this.openProgress * 4;
+    ctx.save();
+    if (this.hl > 0.05) { ctx.shadowColor = '#0e7490'; ctx.shadowBlur = 12 * this.hl; }
+    ctx.fillStyle = '#0e7490';
+    ctx.strokeStyle = '#164e63';
+    ctx.lineWidth = 2;
+    // two vertical bars with gap
+    ctx.beginPath();
+    ctx.rect(cx - w/2, cy - h/2, w, (h - gap)/2);
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.rect(cx - w/2, cy + gap/2, w, (h - gap)/2);
+    ctx.fill(); ctx.stroke();
+    // label
+    ctx.fillStyle = '#155e75';
+    ctx.font = 'bold 7px Sarabun, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Cl⁻ channel', cx, cy - h/2 - 4);
+    ctx.restore();
+  }
+}
+
+/* =========================================================
+   Pump rendering helper (two-half opening)
+   pump.angle  0 = open-left/outside, 1 = open-right/inside
+   ========================================================= */
+function drawTwoHalfPump(ctx, pump, base, edge, hi, label) {
+  const cx = MEM_X, cy = pump.y;
+  const w = 64, h = 56;
+  const a = pump.angle;
+  const leftGap  = (1 - a) * 22;
+  const rightGap = a * 22;
+
+  ctx.save();
+  if (pump.hl > 0.05) {
+    ctx.shadowColor = base;
+    ctx.shadowBlur = 16 * pump.hl;
+  }
+
+  // upper half
+  ctx.beginPath();
+  ctx.moveTo(cx - w/2, cy - h/2);
+  ctx.lineTo(cx + w/2, cy - h/2);
+  ctx.lineTo(cx + w/2, cy - rightGap/2);
+  ctx.bezierCurveTo(cx + w/4, cy - rightGap/2 - 4, cx + w/8, cy - 6, cx, cy - 6);
+  ctx.bezierCurveTo(cx - w/8, cy - 6, cx - w/4, cy - leftGap/2 - 4, cx - w/2, cy - leftGap/2);
+  ctx.closePath();
+  ctx.fillStyle = base;  ctx.fill();
+  ctx.strokeStyle = edge; ctx.lineWidth = 2; ctx.stroke();
+
+  // lower half
+  ctx.beginPath();
+  ctx.moveTo(cx - w/2, cy + h/2);
+  ctx.lineTo(cx + w/2, cy + h/2);
+  ctx.lineTo(cx + w/2, cy + rightGap/2);
+  ctx.bezierCurveTo(cx + w/4, cy + rightGap/2 + 4, cx + w/8, cy + 6, cx, cy + 6);
+  ctx.bezierCurveTo(cx - w/8, cy + 6, cx - w/4, cy + leftGap/2 + 4, cx - w/2, cy + leftGap/2);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // highlights
+  ctx.beginPath();
+  ctx.moveTo(cx - w/2 + 3, cy - h/2 + 3); ctx.lineTo(cx + w/2 - 3, cy - h/2 + 3);
+  ctx.strokeStyle = hi; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx - w/2 + 3, cy + h/2 - 3); ctx.lineTo(cx + w/2 - 3, cy + h/2 - 3);
+  ctx.stroke();
+
+  if (label) {
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 8px Sarabun, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, cx, cy - h/2 - 5);
+  }
+  ctx.restore();
+}
+
+/* =========================================================
+   COUNT HELPERS
+   ========================================================= */
+function countSolute(side) {
+  let n = 0;
+  for (const p of State.particles) {
+    if (p.type !== PARTICLE.SOLUTE) continue;
+    if (side === 'out' && p.x < MEM_X) n++;
+    if (side === 'in'  && p.x >= MEM_X) n++;
+  }
+  return n;
+}
+function countWater(side) {
+  let n = 0;
+  for (const p of State.particles) {
+    if (p.type !== PARTICLE.WATER) continue;
+    if (side === 'out' && p.x < MEM_X) n++;
+    if (side === 'in'  && p.x >= MEM_X) n++;
+  }
+  return n;
+}
+function countIon(ion, side) {
+  let n = 0;
+  for (const p of State.particles) {
+    if (p.type !== PARTICLE.ION || p.ion !== ion) continue;
+    if (p.dead) continue;
+    if (side === 'out' && p.x < MEM_X) n++;
+    if (side === 'in'  && p.x >= MEM_X) n++;
+  }
+  return n;
+}
+
+/* =========================================================
+   INIT
+   ========================================================= */
+function rand(a, b) { return a + Math.random() * (b - a); }
+
+function spawnParticles() {
+  State.particles.length = 0;
+
+  // WATER (all modes — water always present)
+  const outW = Math.round(TOTAL_WATER * 0.5);
+  const inW  = TOTAL_WATER - outW;
+  for (let i = 0; i < outW; i++)
+    State.particles.push(new Particle(PARTICLE.WATER, rand(20, MEM_X - 40), rand(20, H - 20)));
+  for (let i = 0; i < inW; i++)
+    State.particles.push(new Particle(PARTICLE.WATER, rand(MEM_X + 40, W - 20), rand(20, H - 20)));
+
+  if (State.mode === 'active') {
+    // Na+ & K+ (& a bit of Cl-)
+    // Use sliders: outConc → Na+ outside bias; inConc → K+ inside bias
+    const naOut = Math.round(TOTAL_NA * (State.outConc / 100));
+    const naIn  = TOTAL_NA - naOut;
+    const kIn   = Math.round(TOTAL_K * (State.inConc / 100));
+    const kOut  = TOTAL_K - kIn;
+
+    for (let i = 0; i < naOut; i++)
+      State.particles.push(new Particle(PARTICLE.ION, rand(20, MEM_X - 50), rand(20, H - 20), { ion: 'Na' }));
+    for (let i = 0; i < naIn; i++)
+      State.particles.push(new Particle(PARTICLE.ION, rand(MEM_X + 50, W - 20), rand(20, H - 20), { ion: 'Na' }));
+    for (let i = 0; i < kOut; i++)
+      State.particles.push(new Particle(PARTICLE.ION, rand(20, MEM_X - 50), rand(20, H - 20), { ion: 'K' }));
+    for (let i = 0; i < kIn; i++)
+      State.particles.push(new Particle(PARTICLE.ION, rand(MEM_X + 50, W - 20), rand(20, H - 20), { ion: 'K' }));
+
+    // Some Cl-: more outside than inside (natural)
+    const clOut = Math.round(TOTAL_CL * 0.7);
+    const clIn  = TOTAL_CL - clOut;
+    for (let i = 0; i < clOut; i++)
+      State.particles.push(new Particle(PARTICLE.ION, rand(20, MEM_X - 50), rand(20, H - 20), { ion: 'Cl' }));
+    for (let i = 0; i < clIn; i++)
+      State.particles.push(new Particle(PARTICLE.ION, rand(MEM_X + 50, W - 20), rand(20, H - 20), { ion: 'Cl' }));
+
+    // starter ATP
+    addATP(4);
+  } else {
+    // SOLUTE for non-active modes
+    const totalConc = State.outConc + State.inConc || 1;
+    const outS = Math.round(TOTAL_SOLUTE * (State.outConc / totalConc));
+    const inS  = TOTAL_SOLUTE - outS;
+    for (let i = 0; i < outS; i++)
+      State.particles.push(new Particle(PARTICLE.SOLUTE, rand(20, MEM_X - 40), rand(20, H - 20)));
+    for (let i = 0; i < inS; i++)
+      State.particles.push(new Particle(PARTICLE.SOLUTE, rand(MEM_X + 40, W - 20), rand(20, H - 20)));
+  }
+}
+
+function setupPumpsAndChannels() {
+  State.pumps.length = 0;
+  State.channels.length = 0;
+
+  if (State.mode === 'facilitated') {
+    const n = 3;
+    for (let i = 0; i < n; i++) {
+      const y = H * (i + 1) / (n + 1);
+      State.pumps.push(new Pump(y));
+    }
+  } else if (State.mode === 'active') {
+    // 2 Na+/K+ pumps + 1 Cl- channel
+    const p1 = new NaKPump(H * 0.28); p1.reset();
+    const p2 = new NaKPump(H * 0.72); p2.reset();
+    State.pumps.push(p1, p2);
+    State.channels.push(new ClChannel(H * 0.5));
+  }
+}
+
+/* =========================================================
+   MEMBRANE & CROSSING
+   ========================================================= */
+function drawMembrane() {
+  ctx.fillStyle = COLORS.outBg; ctx.fillRect(0, 0, MEM_X - 40, H);
+  ctx.fillStyle = COLORS.inBg;  ctx.fillRect(MEM_X + 40, 0, W - (MEM_X + 40), H);
+  ctx.fillStyle = '#fef3c7';    ctx.fillRect(MEM_X - 40, 0, 80, H);
+
+  const spacing = 20;
+  for (let y = spacing/2; y < H; y += spacing) {
+    drawPhospholipid(MEM_X - 28, y, +1);
+    drawPhospholipid(MEM_X + 28, y, -1);
+  }
+}
+function drawPhospholipid(headX, y, dir) {
+  ctx.strokeStyle = COLORS.phTail; ctx.lineWidth = 1.6;
+  for (const off of [-2.5, 2.5]) {
+    ctx.beginPath();
+    ctx.moveTo(headX + dir * 7, y + off);
+    ctx.bezierCurveTo(
+      headX + dir * 13, y + off + 3,
+      headX + dir * 19, y + off - 3,
+      headX + dir * 26, y + off
+    );
+    ctx.stroke();
+  }
+  ctx.fillStyle = COLORS.phHead;
+  ctx.strokeStyle = COLORS.phHeadEdge; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(headX, y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+}
+
+function tryMembraneCross(p) {
+  if (p.crossing) return;
+  const half = 36;
+  if (Math.abs(p.x - MEM_X) > half) return;
+
+  const crossingThisFrame =
+    (p.x - p.vx < MEM_X && p.x >= MEM_X) ||
+    (p.x - p.vx > MEM_X && p.x <= MEM_X);
+  if (!crossingThisFrame) return;
+
+  const mode = State.mode;
+  if (p.lockedUntil > State.time) { bounceOffMembrane(p); return; }
+
+  // *** IONS CANNOT CROSS BILAYER, EVER ***
+  if (p.type === PARTICLE.ION) {
+    bounceOffMembrane(p);
+    return;
+  }
+
+  if (p.type === PARTICLE.WATER) {
+    let permeability = 0.45;
+    if (mode === 'osmosis') {
+      const outS = countSolute('out'), inS = countSolute('in');
+      const diff = inS - outS;
+      const going = p.x >= MEM_X ? 'in' : 'out';
+      if (going === 'in' && diff > 0)      permeability = 0.7;
+      else if (going === 'in' && diff < 0) permeability = 0.2;
+      else if (going === 'out' && diff < 0) permeability = 0.7;
+      else if (going === 'out' && diff > 0) permeability = 0.2;
+      else permeability = 0.45;
+    }
+    if (Math.random() < permeability) State.crossedCount++;
+    else bounceOffMembrane(p);
+    return;
+  }
+
+  if (p.type === PARTICLE.SOLUTE) {
+    if (mode === 'simple') {
+      const outS = countSolute('out'), inS = countSolute('in');
+      const going = p.x >= MEM_X ? 'in' : 'out';
+      let permeability = 0.35;
+      if (going === 'in' && inS < outS) permeability = 0.55;
+      else if (going === 'out' && outS < inS) permeability = 0.55;
+      else permeability = 0.18;
+      if (Math.random() < permeability) State.crossedCount++;
+      else bounceOffMembrane(p);
+    } else {
+      bounceOffMembrane(p);
+    }
+    return;
+  }
+
+  if (p.type === PARTICLE.ATP) { bounceOffMembrane(p); return; }
+}
+
+function bounceOffMembrane(p) {
+  if (p.vx > 0) { p.x = MEM_X - 36 - p.r; p.vx = -Math.abs(p.vx); }
+  else          { p.x = MEM_X + 36 + p.r; p.vx = Math.abs(p.vx); }
+}
+
+/* =========================================================
+   OSMOSIS CELL SHAPE INDICATOR
+   ========================================================= */
+function drawCellIndicator() {
+  if (State.mode !== 'osmosis') return;
+  const inS = countSolute('in'), outS = countSolute('out');
+  let tonicity = 'isotonic';
+  if (outS > inS + 2) tonicity = 'hypertonic';
+  else if (outS < inS - 2) tonicity = 'hypotonic';
+  const inW = countWater('in'), outW = countWater('out');
+  const totalW = inW + outW;
+  const ratio = totalW > 0 ? inW / totalW : 0.5;
+  const scale = 0.6 + ratio * 0.9;
+  const cx = MEM_X + Math.max(80, (W - MEM_X) * 0.65);
+  const cy = 70;
+  const baseR = 28;
+  const r = baseR * scale;
+
+  ctx.save();
+  if (tonicity === 'hypotonic') {
+    ctx.fillStyle = 'rgba(59,130,246,.15)';
+    ctx.beginPath(); ctx.arc(cx, cy, r + 8, 0, Math.PI*2); ctx.fill();
+  } else if (tonicity === 'hypertonic') {
+    ctx.fillStyle = 'rgba(244,63,94,.15)';
+    ctx.beginPath(); ctx.arc(cx, cy, r + 4, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+  const grd = ctx.createRadialGradient(cx-4, cy-4, 4, cx, cy, r);
+  grd.addColorStop(0, '#fff1f2'); grd.addColorStop(1, '#fda4af');
+  ctx.fillStyle = grd; ctx.fill();
+  ctx.strokeStyle = '#9f1239'; ctx.lineWidth = 2; ctx.stroke();
+  if (tonicity === 'hypertonic') {
+    ctx.beginPath();
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2;
+      const rr = r + Math.sin(i*1.7 + State.time*0.001) * 3;
+      const px = cx + Math.cos(a) * rr;
+      const py = cy + Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.strokeStyle = '#be123c'; ctx.lineWidth = 1.2; ctx.stroke();
+  }
+  ctx.fillStyle = '#1f2937';
+  ctx.font = 'bold 10px Sarabun, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('สถานะเซลล์', cx, cy + r + 14);
+  ctx.restore();
+
+  const badge = document.getElementById('tonicityBadge');
+  badge.classList.remove('hidden');
+  if (tonicity === 'hypertonic') {
+    badge.textContent = 'HYPERTONIC · เซลล์เหี่ยว (Plasmolysis)';
+    badge.className = 'absolute bottom-5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300';
+  } else if (tonicity === 'hypotonic') {
+    badge.textContent = 'HYPOTONIC · เซลล์เต่ง (Turgid/Lysis)';
+    badge.className = 'absolute bottom-5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300';
+  } else {
+    badge.textContent = 'ISOTONIC · สมดุล (Normal)';
+    badge.className = 'absolute bottom-5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300';
+  }
+}
+
+/* =========================================================
+   MAIN LOOP
+   ========================================================= */
+let lastTs = performance.now();
+function loop(ts) {
+  const rawDt = ts - lastTs;
+  lastTs = ts;
+  const dt = State.running ? Math.min(40, rawDt) * State.speed : 0;
+  if (State.running) State.time += dt;
+
+  // ATP auto-generation
+  if (State.running && State.mode === 'active' && State.atpRate > 0) {
+    State.atpAccumulator += dt * State.atpRate / 1000;
+    while (State.atpAccumulator >= 1) { addATP(1); State.atpAccumulator -= 1; }
+  }
+
+  // Update particles
+  for (const p of State.particles) {
+    if (p.dead) continue;
+    const oldX = p.x;
+    p.update(dt * 0.05);
+    if (!p.crossing && p.x !== oldX) tryMembraneCross(p);
+  }
+
+  // Fade-out dead ATP
+  for (let i = State.particles.length - 1; i >= 0; i--) {
+    const p = State.particles[i];
+    if (p.dead && p.type === PARTICLE.ATP) {
+      p._fade = (p._fade || 0) + dt;
+      if (p._fade > 1200) State.particles.splice(i, 1);
+    }
+  }
+
+  // Update pumps & channels
+  for (const pump of State.pumps) pump.update(dt);
+  for (const ch of State.channels) ch.update(dt);
+
+  // DRAW
+  ctx.clearRect(0, 0, W, H);
+  drawMembrane();
+  drawCellIndicator();
+  for (const ch of State.channels) ch.draw(ctx);
+  for (const pump of State.pumps) pump.draw(ctx);
+
+  for (const p of State.particles) {
+    if (p.dead) {
+      const a = Math.max(0, 1 - (p._fade||0)/1200);
+      ctx.globalAlpha = a; p.draw(ctx); ctx.globalAlpha = 1;
+    } else {
+      p.draw(ctx);
+    }
+  }
+
+  // History sampling
+  if (!loop._tick || State.time - loop._tick > 250) {
+    loop._tick = State.time;
+    if (State.mode === 'active') {
+      State.history.push({
+        t: State.time,
+        naOut: countIon('Na','out'), naIn: countIon('Na','in'),
+        kOut:  countIon('K','out'),  kIn:  countIon('K','in'),
+      });
+    } else {
+      State.history.push({ t: State.time, out: countSolute('out'), inC: countSolute('in') });
+    }
+    if (State.history.length > 240) State.history.shift();
+  }
+
+  updateHUD();
+  drawChart();
+  updatePumpStateBadge();
+
+  requestAnimationFrame(loop);
+}
+
+/* =========================================================
+   ATP HELPERS
+   ========================================================= */
+function addATP(n) {
+  for (let i = 0; i < n; i++) {
+    const x = rand(MEM_X + 60, W - 40);
+    const y = rand(40, H - 40);
+    State.particles.push(new Particle(PARTICLE.ATP, x, y));
+  }
+}
+
+/* =========================================================
+   HUD UPDATES
+   ========================================================= */
+function updateHUD() {
+  if (State.mode === 'active') {
+    document.getElementById('liveNaOut').textContent = countIon('Na','out');
+    document.getElementById('liveNaIn').textContent  = countIon('Na','in');
+    document.getElementById('liveKOut').textContent  = countIon('K','out');
+    document.getElementById('liveKIn').textContent   = countIon('K','in');
+    document.getElementById('liveClOut').textContent = countIon('Cl','out');
+    document.getElementById('liveClIn').textContent  = countIon('Cl','in');
+    // simple Nernst-style estimate for "feel" — not exact mV
+    const mp = estimateMembranePotential();
+    document.getElementById('membranePot').textContent = mp.toFixed(0) + ' mV';
+    // Update gauge indicator (-100 .. +50 mV range → 0..100% width)
+    const mpClamped = Math.max(-100, Math.min(50, mp));
+    const mpPct = ((mpClamped + 100) / 150) * 100;
+    document.getElementById('mpIndicator').style.left = mpPct + '%';
+
+    // Cycle Progress (reads first pump as representative)
+    if (State.pumps.length > 0) {
+      const p = State.pumps[0];
+      const stepNames = {
+        1: 'E1 · จับ Na⁺ จากในเซลล์',
+        2: 'E1 · 3 Na⁺ จับครบ · รอ ATP',
+        3: 'E1 · ATP จับ → Phosphorylation',
+        4: '⟳ Conformational change → E2',
+        5: 'E2 · ปล่อย Na⁺ ออกนอกเซลล์',
+        6: 'E2 · จับ K⁺ จากนอกเซลล์',
+        7: 'E2 · 2 K⁺ จับครบ · ปล่อย ADP+Pi',
+        8: '⟳ Conformational change → E1',
+        9: 'E1 · ปล่อย K⁺ เข้าเซลล์',
+      };
+      const step = p.stepNumber();
+      document.getElementById('cycleStepNum').textContent  = step;
+      document.getElementById('cycleStepName').textContent = stepNames[step] || '';
+      document.getElementById('naCycleCount').textContent  = p.naMovedThisCycle;
+      document.getElementById('kCycleCount').textContent   = p.kMovedThisCycle;
+      document.getElementById('atpCycleCount').textContent = p.atpUsedThisCycle;
+    }
+  } else {
+    document.getElementById('liveOut').textContent = countSolute('out');
+    document.getElementById('liveIn').textContent  = countSolute('in');
+  }
+  document.getElementById('atpLive').textContent =
+    State.particles.filter(p => p.type === PARTICLE.ATP && !p.depleted && !p.dead).length;
+  document.getElementById('atpUsed').textContent = State.atpUsed;
+  document.getElementById('crossed').textContent = State.crossedCount;
+  document.getElementById('cycles').textContent = State.cycles;
+  document.getElementById('timeLabel').textContent = (State.time/1000).toFixed(1) + ' s';
+  updateLiveDescription();
+}
+
+function estimateMembranePotential() {
+  // Very rough — not Nernst, just for educational feel
+  // negative inside if K+ leaks out (high inside) and Na+ stays out (high outside)
+  const naOut = countIon('Na','out'), naIn = countIon('Na','in');
+  const kOut  = countIon('K','out'),  kIn  = countIon('K','in');
+  const totalNa = Math.max(1, naOut + naIn);
+  const totalK  = Math.max(1, kOut + kIn);
+  const naBias = (naOut - naIn) / totalNa; // +1 = all Na+ outside
+  const kBias  = (kIn  - kOut) / totalK;   // +1 = all K+ inside
+  return -(naBias * 40 + kBias * 60);      // typical resting ~ -70 mV
+}
+
+function updatePumpStateBadge() {
+  const el = document.getElementById('pumpStateBadge');
+  if (State.mode !== 'active' || State.pumps.length === 0) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  // show the first pump's label as a representative live state
+  el.textContent = '🔬 Pump state: ' + State.pumps[0].label;
+}
+
+function updateLiveDescription() {
+  const desc = document.getElementById('liveDescription');
+  let txt = '';
+  if (State.mode === 'simple') {
+    const outS = countSolute('out'), inS = countSolute('in');
+    const grad = outS - inS;
+    const eq = Math.abs(grad) <= 2;
+    if (eq) txt = `ความเข้มข้นใกล้สมดุลแล้ว (นอก ${outS} : ใน ${inS}) — โมเลกุลยังเคลื่อนที่ตลอดเวลาแต่ฟลักซ์สุทธิเป็นศูนย์ (Dynamic equilibrium)`;
+    else txt = `สารกำลังแพร่จากบริเวณ${grad>0?'นอก':'ใน'}เซลล์ (เข้มข้นกว่า, ${grad>0?outS:inS}) → บริเวณ${grad>0?'ใน':'นอก'}เซลล์ (เจือจางกว่า, ${grad>0?inS:outS}) ผ่าน Phospholipid Bilayer โดยตรง — ไม่ใช้พลังงาน`;
+  } else if (State.mode === 'osmosis') {
+    const outS = countSolute('out'), inS = countSolute('in');
+    const grad = outS - inS;
+    const eq = Math.abs(grad) <= 2;
+    const outW = countWater('out'), inW = countWater('in');
+    if (eq) txt = `สถานะ Isotonic — ความเข้มข้นทั้งสองด้านเท่ากัน น้ำยังคงเคลื่อนที่ผ่านเยื่อแต่ปริมาณสุทธิเป็นศูนย์ เซลล์อยู่ในสภาพปกติ`;
+    else if (grad > 0) txt = `นอกเซลล์เข้มข้นกว่า (Hypertonic) — น้ำออสโมซิสจากใน→นอก ทำให้เซลล์เหี่ยว · น้ำใน: ${inW} · น้ำนอก: ${outW}`;
+    else txt = `นอกเซลล์เจือจางกว่า (Hypotonic) — น้ำออสโมซิสจากนอก→ใน ทำให้เซลล์เต่ง · น้ำใน: ${inW} · น้ำนอก: ${outW}`;
+  } else if (State.mode === 'facilitated') {
+    const outS = countSolute('out'), inS = countSolute('in');
+    const grad = outS - inS;
+    const eq = Math.abs(grad) <= 2;
+    if (eq) txt = `เข้าใกล้สมดุล — โปรตีนตัวพายังเปิด-ปิดสลับด้าน แต่ไม่มีฟลักซ์สุทธิ · ไม่ใช้พลังงาน ATP`;
+    else txt = `โปรตีนตัวพา (Carrier Protein) เปลี่ยนรูปรับสารจากฝั่ง${grad>0?'นอก':'ใน'}เซลล์ (เข้มข้นสูง) → ปล่อยฝั่ง${grad>0?'ใน':'นอก'}เซลล์ (เข้มข้นต่ำ) — ไหลตาม Gradient ไม่ใช้พลังงาน`;
+  } else if (State.mode === 'active') {
+    const atpAvail = State.particles.filter(p => p.type === PARTICLE.ATP && !p.depleted && !p.dead).length;
+    const naOut = countIon('Na','out'), naIn = countIon('Na','in');
+    const kOut  = countIon('K','out'),  kIn  = countIon('K','in');
+    if (State.ouabainActive) {
+      txt = `🚫 Ouabain ยับยั้ง Na⁺/K⁺ ATPase — pump ถูกล็อกที่ conformation ปัจจุบัน ไม่สามารถ pump ไอออนได้ ` +
+            `gradient หยุดถูกบำรุงรักษา · ในเซลล์จริง: Na⁺ จะค่อยๆ รั่วเข้าเซลล์ผ่าน leak channels ทำให้เซลล์บวมและตาย ` +
+            `(หลักการนี้ใช้ใน digoxin/digitalis รักษาภาวะหัวใจล้มเหลว) · ATP ที่ใช้ค้าง ${State.atpUsed} · รอบสำเร็จ ${State.cycles}`;
+    } else if (atpAvail === 0) {
+      txt = `⚠ ไม่มี ATP ในเซลล์ — Na⁺/K⁺ ATPase ทำงานไม่ได้! ไอออน Na⁺ และ K⁺ มีประจุ ผ่าน phospholipid bilayer ไม่ได้ — ต้องเติม ATP เพื่อให้ pump ทำงาน`;
+    } else {
+      txt = `Na⁺/K⁺ ATPase pump (ทิศทางคงที่ตามโครงสร้างโปรตีน): ` +
+            `ใน 1 รอบ pump ลำเลียง 3 Na⁺ ออกนอกเซลล์ + 2 K⁺ เข้าเซลล์ + ใช้ 1 ATP พร้อมกัน · ` +
+            `Na⁺ (ใน:${naIn} → นอก:${naOut}) สวนทาง gradient · ` +
+            `K⁺ (นอก:${kOut} → ใน:${kIn}) สวนทาง gradient · ` +
+            `ATP ที่ใช้ ${State.atpUsed} · รอบ ${State.cycles} · ` +
+            `Cl⁻ ผ่าน Cl⁻ channel ตาม gradient (passive)`;
+    }
+  }
+  desc.textContent = txt;
+}
+
+/* =========================================================
+   CHART
+   ========================================================= */
+function drawChart() {
+  const rc = chartCvs.getBoundingClientRect();
+  const w = rc.width, h = rc.height;
+  chartCtx.clearRect(0, 0, w, h);
+  chartCtx.strokeStyle = '#e2e8f0'; chartCtx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    const y = (h * i) / 4;
+    chartCtx.beginPath(); chartCtx.moveTo(0, y); chartCtx.lineTo(w, y); chartCtx.stroke();
+  }
+  const data = State.history;
+  if (data.length < 2) return;
+  const t0 = data[0].t;
+  const tEnd = data[data.length - 1].t;
+  const range = Math.max(1, tEnd - t0);
+
+  if (State.mode === 'active') {
+    const maxC = TOTAL_NA;
+    const line = (key, color) => {
+      chartCtx.strokeStyle = color; chartCtx.lineWidth = 2;
+      chartCtx.beginPath();
+      for (let i = 0; i < data.length; i++) {
+        const x = ((data[i].t - t0) / range) * w;
+        const y = h - (data[i][key] / maxC) * h;
+        if (i === 0) chartCtx.moveTo(x, y); else chartCtx.lineTo(x, y);
+      }
+      chartCtx.stroke();
+    };
+    line('naOut', '#f97316');  // Na+ outside
+    line('naIn',  '#fdba74');  // Na+ inside (lighter)
+    line('kIn',   '#8b5cf6');  // K+ inside
+    line('kOut',  '#c4b5fd');  // K+ outside (lighter)
+  } else {
+    const maxC = TOTAL_SOLUTE;
+    const line = (key, color) => {
+      chartCtx.strokeStyle = color; chartCtx.lineWidth = 2;
+      chartCtx.beginPath();
+      for (let i = 0; i < data.length; i++) {
+        const x = ((data[i].t - t0) / range) * w;
+        const y = h - (data[i][key] / maxC) * h;
+        if (i === 0) chartCtx.moveTo(x, y); else chartCtx.lineTo(x, y);
+      }
+      chartCtx.stroke();
+    };
+    line('out', '#3b82f6');
+    line('inC', '#ef4444');
+  }
+}
+
+/* =========================================================
+   MODE / CONTROLS
+   ========================================================= */
+function setMode(mode) {
+  const prevMode = State.mode;
+  State.mode = mode;
+
+  const outSlider = document.getElementById('outConc');
+  const inSlider  = document.getElementById('inConc');
+
+  // Active mode: pump direction is FIXED biologically (Na⁺ out, K⁺ in).
+  // To ensure the simulation always demonstrates AGAINST-gradient transport,
+  // restrict initial-state sliders to the physiological range (≥50%):
+  //   • Na⁺ outside ≥ 50% (so pump moves Na⁺ from LOW inside → HIGH outside)
+  //   • K⁺  inside  ≥ 50% (so pump moves K⁺ from LOW outside → HIGH inside)
+  if (mode === 'active') {
+    outSlider.min = 50;
+    inSlider.min  = 50;
+    if (+outSlider.value < 50) outSlider.value = 75;
+    if (+inSlider.value  < 50) inSlider.value  = 75;
+    State.outConc = +outSlider.value;
+    State.inConc  = +inSlider.value;
+    document.getElementById('outConcLabel').textContent = State.outConc + '%';
+    document.getElementById('inConcLabel').textContent  = State.inConc + '%';
+  } else {
+    outSlider.min = 0;
+    inSlider.min  = 0;
+    if (prevMode === 'active') {
+      outSlider.value = 70; inSlider.value = 30;
+      State.outConc = 70; State.inConc = 30;
+      document.getElementById('outConcLabel').textContent = '70%';
+      document.getElementById('inConcLabel').textContent  = '30%';
+    }
+  }
+
+  document.querySelectorAll('.mode-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  document.getElementById('atpControls').classList.toggle('hidden', mode !== 'active');
+  document.getElementById('legendDefault').classList.toggle('hidden', mode === 'active');
+  document.getElementById('legendActive').classList.toggle('hidden', mode !== 'active');
+  document.getElementById('statsDefault').classList.toggle('hidden', mode === 'active');
+  document.getElementById('statsIons').classList.toggle('hidden', mode !== 'active');
+  if (mode !== 'osmosis') document.getElementById('tonicityBadge').classList.add('hidden');
+  if (mode !== 'active') document.getElementById('pumpStateBadge').classList.add('hidden');
+
+  // Update chart legend
+  const legend = document.getElementById('chartLegend');
+  if (mode === 'active') {
+    legend.innerHTML = `
+      <span class="flex items-center gap-1"><span class="legend-dot bg-orange-500" style="width:8px;height:8px"></span>Na⁺ นอก</span>
+      <span class="flex items-center gap-1"><span class="legend-dot bg-orange-300" style="width:8px;height:8px"></span>Na⁺ ใน</span>
+      <span class="flex items-center gap-1"><span class="legend-dot bg-violet-500" style="width:8px;height:8px"></span>K⁺ ใน</span>
+      <span class="flex items-center gap-1"><span class="legend-dot bg-violet-300" style="width:8px;height:8px"></span>K⁺ นอก</span>`;
+  } else {
+    legend.innerHTML = `
+      <span class="flex items-center gap-1"><span class="legend-dot bg-blue-500" style="width:8px;height:8px"></span>นอกเซลล์</span>
+      <span class="flex items-center gap-1"><span class="legend-dot bg-rose-500" style="width:8px;height:8px"></span>ในเซลล์</span>`;
+  }
+
+  // Slider labels (context-aware for active mode)
+  if (mode === 'active') {
+    document.getElementById('outConcTitle').textContent = 'Na⁺ outside (เริ่มต้น)';
+    document.getElementById('outConcHint').textContent  = 'ช่วง 50-100% (Na⁺ ต้องเข้มข้นนอกเซลล์ — physiological)';
+    document.getElementById('inConcTitle').textContent  = 'K⁺ inside (เริ่มต้น)';
+    document.getElementById('inConcHint').textContent   = 'ช่วง 50-100% (K⁺ ต้องเข้มข้นในเซลล์ — physiological)';
+  } else {
+    document.getElementById('outConcTitle').textContent = 'ความเข้มข้นนอกเซลล์';
+    document.getElementById('outConcHint').textContent  = 'Extracellular concentration';
+    document.getElementById('inConcTitle').textContent  = 'ความเข้มข้นในเซลล์';
+    document.getElementById('inConcHint').textContent   = 'Intracellular concentration';
+  }
+
+  const blurbs = {
+    simple: 'การแพร่แบบธรรมดา — สารเล็กไม่มีประจุ (O₂, CO₂) ผ่าน Phospholipid Bilayer โดยตรง จากเข้มข้นสูง→ต่ำ',
+    osmosis: 'ออสโมซิส — เฉพาะน้ำผ่านเยื่อเลือกผ่าน เคลื่อนเข้าหาบริเวณที่มีสารละลายเข้มข้น',
+    facilitated: 'การแพร่แบบมีตัวพา — สารผ่านโปรตีน Carrier ทิศตาม Gradient ไม่ใช้พลังงาน',
+    active: 'Na⁺/K⁺ ATPase — โปรตีนทิศทางคงที่ (Na⁺ ออกนอกเซลล์ + K⁺ เข้าเซลล์) อัตราส่วน 3Na⁺ : 2K⁺ : 1ATP ต่อรอบ. ไอออนมีประจุ ผ่าน bilayer ไม่ได้! Sliders ถูกจำกัด ≥50% เพื่อให้เป็น physiological state (สวน gradient เสมอ)',
+  };
+  document.getElementById('mode-blurb').textContent = blurbs[mode];
+
+  resetSim();
+}
+
+function resetSim() {
+  State.time = 0;
+  State.atpUsed = 0;
+  State.cycles = 0;
+  State.crossedCount = 0;
+  State.history.length = 0;
+  State.atpAccumulator = 0;
+  // Clear ouabain inhibition on reset — start fresh
+  State.ouabainActive = false;
+  const ouCheck = document.getElementById('ouabain');
+  if (ouCheck) ouCheck.checked = false;
+  spawnParticles();
+  setupPumpsAndChannels();
+}
+
+document.querySelectorAll('.mode-tab').forEach(btn => {
+  btn.addEventListener('click', () => setMode(btn.dataset.mode));
+});
+document.getElementById('outConc').addEventListener('input', e => {
+  State.outConc = +e.target.value;
+  document.getElementById('outConcLabel').textContent = State.outConc + '%';
+});
+document.getElementById('inConc').addEventListener('input', e => {
+  State.inConc = +e.target.value;
+  document.getElementById('inConcLabel').textContent = State.inConc + '%';
+});
+document.getElementById('speed').addEventListener('input', e => {
+  State.speed = +e.target.value;
+  document.getElementById('speedLabel').textContent = State.speed.toFixed(2) + '×';
+});
+document.getElementById('atpRate').addEventListener('input', e => {
+  State.atpRate = +e.target.value;
+  document.getElementById('atpRateLabel').textContent = State.atpRate;
+});
+document.getElementById('injectAtp').addEventListener('click', () => addATP(5));
+document.getElementById('ouabain').addEventListener('change', e => {
+  State.ouabainActive = e.target.checked;
+});
+document.getElementById('startBtn').addEventListener('click', () => { State.running = true; });
+document.getElementById('pauseBtn').addEventListener('click', () => { State.running = false; });
+document.getElementById('resetBtn').addEventListener('click', () => {
+  State.running = false; resetSim();
+});
+
+// Preset scenarios — quick experimental setups for active transport
+function applyActivePreset(outC, inC, atpRate, autoStart = true) {
+  const outSlider = document.getElementById('outConc');
+  const inSlider  = document.getElementById('inConc');
+  const atpSlider = document.getElementById('atpRate');
+  outSlider.value = outC; inSlider.value = inC; atpSlider.value = atpRate;
+  State.outConc = outC; State.inConc = inC; State.atpRate = atpRate;
+  document.getElementById('outConcLabel').textContent = outC + '%';
+  document.getElementById('inConcLabel').textContent  = inC + '%';
+  document.getElementById('atpRateLabel').textContent = atpRate;
+  resetSim();
+  if (autoStart) State.running = true;
+}
+document.getElementById('presetRest').addEventListener('click',
+  () => applyActivePreset(75, 75, 2));
+document.getElementById('presetBuild').addEventListener('click',
+  () => applyActivePreset(50, 50, 3));
+document.getElementById('presetMax').addEventListener('click',
+  () => applyActivePreset(100, 100, 3));
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+window.addEventListener('load', () => {
+  resizeCanvas();
+  State.outConc = +document.getElementById('outConc').value;
+  State.inConc  = +document.getElementById('inConc').value;
+  State.atpRate = +document.getElementById('atpRate').value;
+  document.getElementById('outConcLabel').textContent = State.outConc + '%';
+  document.getElementById('inConcLabel').textContent  = State.inConc + '%';
+  document.getElementById('atpRateLabel').textContent = State.atpRate;
+  setMode('simple');
+  lastTs = performance.now();
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>
